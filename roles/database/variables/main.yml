@@ -1,0 +1,4 @@
+---
+database_user: mysql
+database_mount: /mnt/data
+database_port: 3306
