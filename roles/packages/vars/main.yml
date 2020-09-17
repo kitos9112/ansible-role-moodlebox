@@ -2,7 +2,6 @@
 
 moodlebox_install_packages:
   - iptables-persistent
-  - hostapd
   - dnsmasq
   - git
   - ntfs-3g

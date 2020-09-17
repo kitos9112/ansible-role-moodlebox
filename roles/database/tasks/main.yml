@@ -36,9 +36,12 @@
   no_log: 'true'
 
 - name: update MariaDB settings
-  copy:
-    src: 'etc/mysql/mariadb.conf.d/50-server.cnf'
+  template:
+    src: '50-server.cnf.j2'
     dest: '/etc/mysql/mariadb.conf.d/50-server.cnf'
+    owner: "{{ database_user }}"
+    group: "{{ database_user }}"
+    mode: '0644'
 
 - name: restart MariaDB database
   systemd:

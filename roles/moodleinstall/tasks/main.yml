@@ -5,8 +5,8 @@
 - name: get Moodle and install it
   import_tasks: coreinstall.yml
 
-- name: get MoodleBox plugin and install it
-  import_tasks: moodleboxplugin.yml
+# - name: get MoodleBox plugin and install it
+#   import_tasks: moodleboxplugin.yml
 
 - name: install MathJax library
   import_tasks: mathjax.yml
