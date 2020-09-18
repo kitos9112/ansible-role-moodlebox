@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# Setup the `environment`
+ETC=$(pwd)/etc
+LIB=$(pwd)/lib
+LOG=$(pwd)/log
+
+if [ ! -d $ETC -a ! -d $LIB -a ! -d $LOG ]
+then
+  mkdir $ETC $LIB $LOG
+  echo 'Directories created'
+fi
+
+# Check supplied arguments
+case $1 in
+  (certonly) ;; # OK
+  (*) printf >&2 'Usage: $0 <command> <certonly||renew>\n'; exit 1;;
+esac
+
+docker run -it --rm --name certbot \
+   -v "$ETC:/etc/letsencrypt:rw" \
+   -v "$LIB:/var/lib/letsencrypt:rw" \
+   -v "$LOG:/var/log/letsencrypt:rw" \
+   {{ moodlebox_docker_repo }} \
+   --dns-cloudflare \
+   --dns-cloudflare-credentials /etc/letsencrypt/cf.ini \
+   --dns-cloudflare-propagation-seconds 30 \
+   --non-interactive --agree-tos --email {{ cloudflare_account_email }} \
+   $1 -d {{ moodlebox_hostname }}.{{ moodlebox_tld }}
+
+if [ $? -eq 0 ]
+then
+  echo "Copying PEM certificate and PRIV key to their respective dirs for MOODLEBOX"
+  install -C -m 600 -o {{ moodlebox_webserver_user }} -g {{ moodlebox_webserver_user }} $(pwd)/etc/live/{{ moodlebox_hostname }}.{{ moodlebox_tld }}/fullchain.pem {{ moodlebox_tls_cert_pem }}
+  install -C -m 600 -o {{ moodlebox_webserver_user }} -g {{ moodlebox_webserver_user }} $(pwd)/etc/live/{{ moodlebox_hostname }}.{{ moodlebox_tld }}/privkey.pem {{ moodlebox_tls_key_pem }}
+else
+  exit 1
+fi

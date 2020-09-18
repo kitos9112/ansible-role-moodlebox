@@ -1,0 +1,61 @@
+---
+- name: configure MariaDB root password
+  debconf:
+    name: 'mariadb-server'
+    question: '{{ item }}'
+    vtype: 'password'
+    value: '{{ moodlebox_db_root_password | quote }}'
+  # passwords cannot be read, so they always appear as changed, this is alimitation of debconf itself. 
+  changed_when: false
+  with_items:
+    - 'mysql-server/root_password'
+    - 'mysql-server/root_password_again'
+  register: configure_mariadb_install
+
+- name: install MariaDB
+  apt:
+    pkg: 'mariadb-server'
+    state: 'present'
+  when: configure_mariadb_install is successful
+  register: install_mariadb
+  until: install_mariadb is succeeded
+
+- name: add '{{ moodlebox_db_username }}' MariaDB user with all privileges
+  mysql_user:
+    name: '{{ moodlebox_db_username }}'
+    password: '{{ moodlebox_db_password }}'
+    host: 'localhost'
+    config_file: /etc/mysql/debian.cnf
+    priv: '*.*:ALL,GRANT'
+    state: 'present'
+  no_log: 'true'
+
+- block:
+    - name: Stop MariaDB-server service
+      systemd:
+        name: 'mariadb'
+        state: 'stopped'
+    - name: Force systemd to reread configs
+      systemd:
+        daemon_reload: yes
+    - name: Synchronization of src on the control machine to dest on the remote hosts
+      synchronize:
+        src: /var/lib/mysql
+        dest: "{{ moodlebox_db_mount }}/var/lib/mysql"
+      delegate_to: "{{ inventory_hostname }}"
+  when: install_mariadb.changed |bool
+
+- name: update MariaDB settings
+  register: update_mariadb
+  template:
+    src: '50-server.cnf.j2'
+    dest: '/etc/mysql/mariadb.conf.d/50-server.cnf'
+    owner: "{{ database_user }}"
+    group: "{{ database_user }}"
+    mode: '0644'
+
+- name: restart MariaDB database
+  systemd:
+    name: 'mariadb'
+    state: 'restarted'
+  when: update_mariadb.changed |bool

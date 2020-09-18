@@ -1,0 +1,41 @@
+---
+
+- name: clean Moodle database log tables
+  command: mysql -e 'TRUNCATE TABLE {{ moodlebox_moodle_db }}.{{ item }}'
+  with_items:
+    - 'mdl_config_log'
+    - 'mdl_logstore_standard_log'
+    - 'mdl_task_log'
+    - 'mdl_upgrade_log'
+  when: moodle_db_created is succeeded
+
+- name: cleanup dirs and files
+  include_tasks: cleandirfile.yml
+  with_items:
+    - '{{ moodlebox_moodle_data_dir }}/cache/'
+    - '{{ moodlebox_moodle_data_dir }}/localcache/'
+    - '{{ moodlebox_moodle_data_dir }}/temp/'
+    - '{{ moodlebox_moodle_data_dir }}/trashdir/'
+    - '{{ moodlebox_moodle_data_dir }}/sessions/'
+    - '/var/cache/moodle/'
+    - '/var/cache/moodle-cache-backup/'
+    - '/var/lib/apt/lists/'
+    - '/var/cache/debconf/'
+    - '/tmp/'
+    - '/var/tmp/'
+    - '/root/.bash_history'
+    - '/root/.mysql_history'
+    - '/root/.nano_history'
+
+- name: find log files to truncate
+  find:
+    paths: '/var/log'
+    recurse: 'yes'
+  register: log_files
+
+- name: empty log files
+  command: 'truncate --size 0 {{ item.path }}'
+  with_items:
+    - '{{ log_files.files }}'
+  register: log_files_emptied
+  changed_when: log_files_emptied.rc == 0
