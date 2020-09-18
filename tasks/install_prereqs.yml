@@ -24,13 +24,6 @@
     - '/lib/systemd/system/php7.3-fpm.service'
   notify: restart web services
 
-- name: set 'group' of php-fpm process
-  lineinfile:
-    path: '/etc/php/7.3/fpm/pool.d/www.conf'
-    regexp: '^group\s*=\s*www-data.*'
-    line: 'group = {{ moodlebox_username }}'
-  notify: restart web services
-
 - name: set 'pm.max_requests' of php-fpm process
   lineinfile:
     path: '/etc/php/7.3/fpm/pool.d/www.conf'

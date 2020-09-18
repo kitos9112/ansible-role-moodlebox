@@ -1,17 +1,12 @@
 ---
-
-- include_tasks: install_prereqs.yml
-
-- include_tasks: install_mariadb.yml
+- block:
+  - include_tasks: install_prereqs.yml
+  - include_tasks: install_mariadb.yml
+  - include_tasks: install_moodle.yml
+  - include_tasks: install_nginx.yml
+  - include_tasks: install_extras.yml
+  - include_tasks: cleanup.yml
+  when: not moodlebox_uninstall_moodle |bool
 
 - include_tasks: uninstall_moodle.yml
   when: moodlebox_uninstall_moodle |bool
-
-- include_tasks: install_moodle.yml
-  when: moodlebox_uninstall_moodle |bool
-
-- include_tasks: install_nginx.yml
-
-- include_tasks: install_extras.yml
-
-- include_tasks: cleanup.yml

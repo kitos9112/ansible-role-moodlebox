@@ -12,3 +12,5 @@ moodlebox_webserver_user: root
 moodlebox_uninstall_moodle: false
 
 cf_email_address: ''
+cloudflare_api_key: ''
+
