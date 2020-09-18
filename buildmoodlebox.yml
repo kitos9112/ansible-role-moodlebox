@@ -27,26 +27,12 @@
           - 'End of build: {{ lookup("pipe", "date +%Y-%m-%dT%H:%M:%S%z") }}'
           - 'Build duration: {{ lookup("pipe", "date +%s")|int - build_start|int }} s'
 
-  roles:
-    - useraccount # DUDAS
-    
-    - database
-    - packages
-    
-    - packageconfig # DUDAS
+  roles:   
 
-    #- zeroconf
-
-    - webserver # DUDAS
-
-    - moodleuninstall
-
-    - moodledatabase
-
-    - moodleinstall
-    
     - cron
+
     - adminer
-    - cert
-    - branding
+
+    # - cert
+
     - cleanup
