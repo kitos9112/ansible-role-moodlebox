@@ -4,7 +4,6 @@ database_port: 3306
 
 moodlebox_install_packages:
   - iptables-persistent
-  - dnsmasq
   - git
   - ntfs-3g
   - exfat-fuse
