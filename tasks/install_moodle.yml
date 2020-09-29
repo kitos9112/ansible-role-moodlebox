@@ -94,13 +94,6 @@
     chdir: '{{ moodlebox_moodle_source_dir }}'
     creates: '{{ moodlebox_moodle_source_dir }}/config.php'
 
-- name: set Moodle config file owner, group and permissions
-  file:
-    path: '{{ moodlebox_moodle_source_dir }}/config.php'
-    owner: 'www-data'
-    group: '{{ moodlebox_username }}'
-    mode: 'ug+w,o-w'
-
 - name: write extra parameters to the Moodle config file
   lineinfile:
     path: '{{ moodlebox_moodle_source_dir }}/config.php'
@@ -112,6 +105,14 @@
     - { name: 'xsendfilealiases', value: "array('/dataroot/' => $CFG->dataroot)" }
     - { name: 'customfiletypes', value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"}
     - { name: 'showcampaigncontent', value: 'false' }
+    - { name: 'preventexecpath ', value: 'true' }
+
+- name: set Moodle config file owner, group and permissions
+  file:
+    path: '{{ moodlebox_moodle_source_dir }}/config.php'
+    owner: 'www-data'
+    group: 'www-data'
+    mode: '0600'
 
 - name: get MathJax library version '{{ moodlebox_mathjax_version }}' from git repository
   git:
@@ -125,6 +126,6 @@
     path: '{{ moodlebox_moodle_source_dir }}/lib/MathJax'
     state: 'directory'
     owner: 'www-data'
-    group: '{{ moodlebox_username }}'
+    group: 'www-data'
     mode: 'ug+w,o-w'
     recurse: 'yes'
