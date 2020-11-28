@@ -20,6 +20,12 @@
   register: install_mariadb
   until: install_mariadb is succeeded
 
+- name: install MariaDB-backup
+  apt:
+    pkg: 'mariadb-backup'
+    state: 'present'
+  when: configure_mariadb_install is successful
+
 - name: add '{{ moodlebox_db_username }}' MariaDB user with all privileges
   mysql_user:
     name: '{{ moodlebox_db_username }}'
