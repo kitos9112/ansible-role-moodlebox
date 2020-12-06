@@ -39,5 +39,5 @@
     name: ACME Let's Encrypt @MoodleBox
     special_time: daily
     user: root
-    job: "cd {{ moodlebox_certbot_dir }} && ./docker-cert-moodlebox.sh certonly"
+    job: "{{ moodlebox_certbot_dir }}/docker-cert-moodlebox.sh certonly >> /var/log/cronjob-ansible_docker-cert-moodlebox.log 2>&1"
     cron_file: ansible_docker-cert-moodlebox
