@@ -1,25 +1,37 @@
 ---
 - name: configure timely cron
   cron:
-    name: '{{ item.name }}'
-    minute: '{{ item.minute }}'
-    job: '{{ item.job }}'
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    job: "{{ item.job }}"
   with_items:
-    - { name: 'Launch Moodle tasks', minute: '*', job: 'nice -n 10 ionice -c2 /usr/bin/php {{ moodlebox_moodle_source_dir }}/admin/cli/cron.php' }
-    - { name: 'Backup cache', minute: '*/20', job: 'rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/' }
+    - {
+        name: "Launch Moodle tasks",
+        minute: "*",
+        job: "nice -n 10 ionice -c2 /usr/bin/php {{ moodlebox_moodle_source_dir }}/admin/cli/cron.php",
+      }
+    - {
+        name: "Backup cache",
+        minute: "*/20",
+        job: "rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/",
+      }
 
 - name: configure special time cron
   cron:
-    name: '{{ item.name }}'
-    special_time: '{{ item.special_time }}'
-    job: '{{ item.job }}'
+    name: "{{ item.name }}"
+    special_time: "{{ item.special_time }}"
+    job: "{{ item.job }}"
   with_items:
-    - { name: 'Restore cache', special_time: 'reboot', job: 'cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/' }
+    - {
+        name: "Restore cache",
+        special_time: "reboot",
+        job: "cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/",
+      }
 
 - name: configure incron
   template:
-    src: 'var/spool/incron/incron.j2'
-    dest: '/var/spool/incron/root'
+    src: "var/spool/incron/incron.j2"
+    dest: "/var/spool/incron/root"
   register: incron_configured
 
 - name: configure cron mailto variable to suppress warnings in log
@@ -29,8 +41,55 @@
 
 - name: install adminer latest release
   get_url:
-    url: 'https://www.adminer.org/latest.php'
-    dest: '{{ moodlebox_moodle_source_dir }}/adminer.php'
-    owner: 'www-data'
-    group: '{{ moodlebox_username }}'
-    mode: '0664'
+    url: "https://www.adminer.org/latest.php"
+    dest: "{{ moodlebox_moodle_source_dir }}/adminer.php"
+    owner: "www-data"
+    group: "{{ moodlebox_username }}"
+    mode: "0664"
+
+- name: check for existing borg binaray install
+  stat:
+    path: /usr/bin/borg
+  register: borg
+
+- name: check borg version
+  command: "/usr/bin/borg --version | cut -d ' ' -f2"
+  register: borg_version
+  when: "borg.stat.exists"
+  changed_when: False
+  failed_when: False
+
+- name: install borg for the architecture
+  get_url:
+    url: "https://dl.bintray.com/borg-binary-builder/borg-binaries/borg-{{ moodlebox_borg_version }}-arm64"
+    dest: /usr/bin/borg
+  when:
+    - ansible_architecture == 'aarch64'
+    - (borg_version is defined and borg_version.stdout != moodlebox_borg_version) or borg_version is not defined
+
+- name: Configure backups scripts
+  template:
+    src: "usr/bin/{{ item }}"
+    dest: "/usr/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: 0764
+  loop:
+    - backup-mariadb-full.sh
+    - backup-mariadb-inc.sh
+
+- name: create a cronjob to automatically backup MariaDBs every day
+  cron:
+    name: MariaDB Backup daily
+    special_time: daily
+    user: root
+    job: "bash /usr/bin/backup_databases_full.sh"
+    cron_file: ansible_mariadb_full
+
+- name: create a cronjob to incrementally backup MariaDBs every 30min
+  cron:
+    name: MariaDB Backup incremental
+    minute: "30"
+    user: root
+    job: "bash /usr/bin/backup_databases_inc.sh"
+    cron_file: ansible_mariadb_inc

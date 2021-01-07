@@ -37,6 +37,23 @@ To build a MoodleBox from scratch with this script, you need a Raspberry Pi 3B, 
 1. Run `ansible-playbook moodlebox.yml` from the repository folder.
 1. Wait 15–50 minutes, depending on your Raspberry Pi model, SD card speed and Internet bandwidth. You're done.
 
+## Restore the MariaDB database
+Restore the database
+
+And now let's delete the database data and restore the backup:
+
+```shell
+systemctl stop mariadb.service
+rm -rf /var/lib/mysql/* # you should always empty the datadir directory before restoring
+mariabackup --prepare --target-dir=<mariaDB-backupdir>/YYYY-MM/DD_HHh_full/
+mariabackup --prepare --target-dir=<mariaDB-backupdir>/YYYY-MM/DD_HHh_full/ --incremental-dir=<mariaDB-backupdir>/YYYY-MM/DD_HHh_MMm_inc/
+mariabackup --copy-back --target-dir=<mariaDB-backupdir>/YYYY-MM/DD_HHh/
+chown -R mysql:mysql /var/lib/mysql/
+systemctl start mariadb.service
+```
+
+You can now try to connect to the test_restore database and query the recovered data. 
+
 ### Overriding defaults
 
 You can override any of the defaults configured in `default.config.yml` by creating a `config.yml` file and setting the overrides in that file. For example, you can change the MoodleBox main credentials and the timezone with something like:
