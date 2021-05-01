@@ -66,9 +66,12 @@
     passno: "0"
     state: "mounted"
   with_items:
-    - { name: "/var/cache/moodle", size: "64M" }
-    - { name: "{{ moodlebox_moodle_data_dir }}/temp", size: "64M" }
-    - { name: "{{ moodlebox_moodle_data_dir }}/sessions", size: "16M" }
+    - name: "/var/cache/moodle"
+      size: "64M"
+    - name: "{{ moodlebox_moodle_data_dir }}/temp"
+      size: "64M"
+    - name: "{{ moodlebox_moodle_data_dir }}/sessions"
+      size: "16M"
 
 # https://github.com/HCPSS/ansible-role-moodle/blob/master/tasks/install.yml
 - name: install Moodle via CLI
@@ -108,25 +111,16 @@
     - name: "xsendfilealiases"
       value: "array('/dataroot/' => $CFG->dataroot)"
     - name: "customfiletypes"
-      value: "array(\n  (object)array(\n    'extension' => 'crt',\n    'icon' => 'sourcecode',\n    'type' => 'application/x-x509-ca-cert',\n    'customdescription' => 'X.509 CA certificate'\n  )\n)"
+      value: |
+        "array(\n  (object)array(\n
+            'extension' => 'crt',\n
+            'icon' => 'sourcecode',\n
+            'type' => 'application/x-x509-ca-cert',\n
+            'customdescription' => 'X.509 CA certificate'\n  )\n)"
     - name: "showcampaigncontent"
       value: "false"
     - name: "preventexecpath "
       value: "true"
-    # - name: "session_redis_host"
-    #   value: "127.0.0.1"
-    # - name: "session_redis_port"
-    #   value: "6379"
-    # - name: "session_redis_database"
-    #   value: "0"
-    # - name: "session_redis_prefix"
-    #   value: "mdl-msrpi"
-    # - name: "session_redis_acquire_lock_timeout"
-    #   value: "120"
-    # - name: "session_redis_lock_expire"
-    #   value: "7200"
-    # - name: "session_redis_serializer_use_igbinary"
-    #   value: "true"
 
 - name: set Moodle config file owner, group and permissions
   file:

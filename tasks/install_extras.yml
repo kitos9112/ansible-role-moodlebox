@@ -5,16 +5,12 @@
     minute: "{{ item.minute }}"
     job: "{{ item.job }}"
   with_items:
-    - {
-        name: "Launch Moodle tasks",
-        minute: "*",
-        job: "nice -n 10 ionice -c2 /usr/bin/php {{ moodlebox_moodle_source_dir }}/admin/cli/cron.php",
-      }
-    - {
-        name: "Backup cache",
-        minute: "*/20",
-        job: "rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/",
-      }
+    - name: "Launch Moodle tasks"
+      minute: "*"
+      job: "nice -n 10 ionice -c2 /usr/bin/php {{ moodlebox_moodle_source_dir }}/admin/cli/cron.php"
+    - name: Backup cache"
+      minute: "*/20"
+      job: "rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/"
 
 - name: configure special time cron
   cron:
@@ -22,16 +18,15 @@
     special_time: "{{ item.special_time }}"
     job: "{{ item.job }}"
   with_items:
-    - {
-        name: "Restore cache",
-        special_time: "reboot",
-        job: "cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/",
-      }
+    - name: "Restore cache"
+      special_time: "reboot"
+      job: "cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/"
 
 - name: configure incron
   template:
     src: "var/spool/incron/incron.j2"
     dest: "/var/spool/incron/root"
+    mode: 0644
   register: incron_configured
 
 - name: configure cron mailto variable to suppress warnings in log
@@ -56,8 +51,8 @@
   command: "/usr/bin/borg --version | cut -d ' ' -f2"
   register: borg_version
   when: "borg.stat.exists"
-  changed_when: False
-  failed_when: False
+  changed_when: false
+  failed_when: false
 
 - name: install borg for the architecture
   get_url:

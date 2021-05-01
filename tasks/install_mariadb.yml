@@ -43,7 +43,7 @@
         state: "stopped"
     - name: Force systemd to reread configs
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
     - name: Synchronization of src on the control machine to dest on the remote hosts
       synchronize:
         src: /var/lib/mysql

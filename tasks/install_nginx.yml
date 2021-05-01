@@ -1,5 +1,4 @@
 ---
-
 - name: Remove default site
   file:
     path: "{{ item }}"
@@ -13,8 +12,9 @@
   template:
     src: etc/nginx/sites-available/moodle.j2
     dest: /etc/nginx/sites-available/moodle.conf
+    mode: 0644
   notify: restart web services
-  
+
 - name: Create a symbolic link
   file:
     src: /etc/nginx/sites-available/moodle.conf
@@ -26,4 +26,5 @@
 
 - include_tasks: install_acme_x509cert.yml
 
-- meta: flush_handlers
+- name: Flush all handlers
+  meta: flush_handlers

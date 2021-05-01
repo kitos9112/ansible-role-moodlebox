@@ -3,11 +3,13 @@
   file:
     name: /etc/nginx/ssl
     state: directory
+    mode: 0755
 
 - name: "Ensure {{ moodlebox_certbot_dir }} directory exists"
   file:
     path: "{{ moodlebox_certbot_dir }}/etc"
     state: directory
+    mode: 0755
 
 - name: Copy cf.ini into etc folder
   template:
@@ -30,9 +32,11 @@
     chdir: "{{ moodlebox_certbot_dir }}"
     cmd: ./docker-cert-moodlebox.sh certonly
   register: moodlebox_cert_check
-  check_mode: no
+  check_mode: false
   changed_when: >-
     moodlebox_cert_check.stdout.find('Certificate not yet due for renewal; no action taken') == -1
+  args:
+    executable: /bin/bash
 
 - name: Create a cronjob to automatically renew the cert
   cron:
