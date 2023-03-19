@@ -1,0 +1,26 @@
+---
+dependencies: []
+
+galaxy_info:
+  author: Marti Gnomi and Marcos Soutullo
+  role_name: ansible_role_moodlebox
+  namespace: default
+  description: Installs and configures a Moodle in a remote Linux machine
+  license: license (AGPL v3)
+  min_ansible_version: 2.0
+  platforms:
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - trusty
+        - xenial
+        - bionic
+    - name: Archlinux
+      versions:
+        - all
+  galaxy_tags:
+    - moodle
+
+allow_duplicates: true
