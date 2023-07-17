@@ -2,7 +2,7 @@
 moodlebox_db_mount: /mnt/data
 
 moodlebox_certbot_dir: /opt/certbot
-moodlebox_docker_repo: kitos9112/certbot-aarch64-dns-cloudflare
+moodlebox_docker_repo: "certbot/dns-cloudflare"
 
 moodlebox_tls_cert_pem: /etc/nginx/ssl/moodlebox.pem
 moodlebox_tls_key_pem: /etc/nginx/ssl/moodlebox.key

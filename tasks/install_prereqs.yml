@@ -21,33 +21,33 @@
     insertafter: '^\[Service\].*'
   with_items:
     - "/lib/systemd/system/nginx.service"
-    - "/lib/systemd/system/php7.4-fpm.service"
+    - "/lib/systemd/system/php8.1-fpm.service"
   notify: restart web services
 
 - name: set 'pm.max_requests' of php-fpm process
   lineinfile:
-    path: "/etc/php/7.4/fpm/pool.d/www.conf"
+    path: "/etc/php/8.1/fpm/pool.d/www.conf"
     regexp: '^;?pm.max_requests\s*=.*'
     line: "pm.max_requests = 50"
   notify: restart web services
 
 - name: set 'emergency_restart_threshold' for php-fpm to fix SIGSEGV
   lineinfile:
-    path: "/etc/php/7.4/fpm/php-fpm.conf"
+    path: "/etc/php/8.1/fpm/php-fpm.conf"
     regexp: '^;?emergency_restart_threshold\s*=.*'
     line: "emergency_restart_threshold = 2"
   notify: restart web services
 
 - name: set 'emergency_restart_interval' for php-fpm to fix SIGSEGV
   lineinfile:
-    path: "/etc/php/7.4/fpm/php-fpm.conf"
+    path: "/etc/php/8.1/fpm/php-fpm.conf"
     regexp: '^;?emergency_restart_interval\s*=.*'
     line: "emergency_restart_interval = 1h"
   notify: restart web services
 
 - name: set 'process_control_timeout' for php-fpm to fix SIGSEGV
   lineinfile:
-    path: "/etc/php/7.4/fpm/php-fpm.conf"
+    path: "/etc/php/8.1/fpm/php-fpm.conf"
     regexp: '^;?process_control_timeout\s*=.*'
     line: "process_control_timeout = 5s"
   notify: restart web services
@@ -58,12 +58,12 @@
     regexp: '^;?memory_limit\s*=.*'
     line: memory_limit = 512M
   loop:
-    - "/etc/php/7.4/fpm/php.ini"
-    - "/etc/php/7.4/cli/php.ini"
+    - "/etc/php/8.1/fpm/php.ini"
+    - "/etc/php/8.1/cli/php.ini"
 
 - name: increase 'memory_limit' ini php.ini
   lineinfile:
-    path: "/etc/php/7.4/fpm/php.ini"
+    path: "/etc/php/8.1/fpm/php.ini"
     regexp: '^;?upload_max_filesize\s*=.*'
     line: upload_max_filesize = 500M
 
