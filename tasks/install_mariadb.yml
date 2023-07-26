@@ -27,14 +27,15 @@
   when: configure_mariadb_install is successful
 
 - name: add '{{ moodlebox_db_username }}' MariaDB user with all privileges
-  mysql_user:
+  ignore_errors: true
+  community.mysql.mysql_user:
     name: "{{ moodlebox_db_username }}"
-    password: "{{ moodlebox_db_password }}"
     host: "localhost"
+    password: "{{ moodlebox_db_password }}"
     config_file: /etc/mysql/debian.cnf
     priv: "*.*:ALL,GRANT"
     state: "present"
-  no_log: "true"
+  #no_log: true
 
 - block:
     - name: Stop MariaDB-server service
