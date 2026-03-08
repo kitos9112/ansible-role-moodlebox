@@ -11,4 +11,4 @@
     daemon_reload: "yes"
   with_items:
     - "nginx"
-    - "php8.1-fpm"
+    - "php8.4-fpm"

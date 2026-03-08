@@ -1,0 +1,187 @@
+---
+- name: Validate additional Moodle plugin definition
+  ansible.builtin.assert:
+    that:
+      - moodlebox_plugin.component is defined
+      - moodlebox_plugin.path is defined
+      - moodlebox_plugin.repo is defined or moodlebox_plugin.zip_url is defined
+    fail_msg: >-
+      Invalid moodlebox_additional_plugins entry for component
+      {{ moodlebox_plugin.component | default('unknown') }}.
+      Required keys: component, path, and either repo or zip_url.
+
+- name: Resolve additional Moodle plugin paths
+  ansible.builtin.set_fact:
+    moodlebox_plugin_target_path: "{{ (moodlebox_moodle_code_dir | default(moodlebox_moodle_source_dir)) ~ '/' ~ moodlebox_plugin.path }}"
+    moodlebox_plugin_parent_path: "{{ (moodlebox_moodle_code_dir | default(moodlebox_moodle_source_dir)) ~ '/' ~ (moodlebox_plugin.path | dirname) }}"
+    moodlebox_plugin_archive_path: "/tmp/moodlebox-plugin-{{ moodlebox_plugin.component }}.zip"
+
+- name: Ensure additional Moodle plugin parent directory exists
+  ansible.builtin.file:
+    path: "{{ moodlebox_plugin_parent_path }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0775"
+
+- name: Install or update additional Moodle plugin from git
+  ansible.builtin.git:
+    repo: "{{ moodlebox_plugin.repo }}"
+    version: "{{ moodlebox_plugin.version | default('HEAD') }}"
+    dest: "{{ moodlebox_plugin_target_path }}"
+    depth: 1
+    force: "{{ moodlebox_additional_plugins_git_force_update | bool }}"
+  when: moodlebox_plugin.repo is defined
+
+- name: Check whether ZIP plugin version.php exists
+  ansible.builtin.stat:
+    path: "{{ moodlebox_plugin_target_path }}/version.php"
+  register: moodlebox_zip_plugin_version_file
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Read currently installed ZIP plugin version file
+  ansible.builtin.slurp:
+    path: "{{ moodlebox_plugin_target_path }}/version.php"
+  register: moodlebox_zip_plugin_version_file_content
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_version_file.stat.exists
+
+- name: Extract currently installed ZIP plugin version
+  ansible.builtin.set_fact:
+    moodlebox_zip_plugin_installed_version: >-
+      {{
+        (
+          moodlebox_zip_plugin_version_file_content.content
+          | b64decode
+          | regex_findall("plugin->version[ \\t]*=[ \\t]*([0-9]+)")
+          | first
+          | default('')
+        )
+        | string
+        | trim
+      }}
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_version_file.stat.exists
+
+- name: Extract currently installed ZIP plugin component
+  ansible.builtin.set_fact:
+    moodlebox_zip_plugin_installed_component: >-
+      {{
+        (
+          moodlebox_zip_plugin_version_file_content.content
+          | b64decode
+          | regex_findall("plugin->component[ \\t]*=[ \\t]*'([^']+)'")
+          | first
+          | default('')
+        )
+        | string
+        | trim
+      }}
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_version_file.stat.exists
+
+- name: Determine whether ZIP plugin install is required
+  ansible.builtin.set_fact:
+    moodlebox_zip_plugin_needs_install: >-
+      {{
+        (not (moodlebox_zip_plugin_version_file.stat.exists | default(false)))
+        or
+        (
+          (moodlebox_zip_plugin_installed_component | default('') | trim)
+          !=
+          (moodlebox_plugin.component | string | trim)
+        )
+        or
+        (
+          moodlebox_plugin.version is defined
+          and
+          (moodlebox_zip_plugin_installed_version | default('') | trim)
+          !=
+          (moodlebox_plugin.version | string | trim)
+        )
+        or
+        (moodlebox_additional_plugins_zip_force_update | bool)
+      }}
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Download additional Moodle plugin ZIP archive
+  ansible.builtin.get_url:
+    url: "{{ moodlebox_plugin.zip_url }}"
+    dest: "{{ moodlebox_plugin_archive_path }}"
+    mode: "0644"
+    force: true
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_needs_install | bool
+
+- name: Remove existing additional Moodle plugin directory before ZIP install
+  ansible.builtin.file:
+    path: "{{ moodlebox_plugin_target_path }}"
+    state: absent
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_needs_install | bool
+
+- name: Extract additional Moodle plugin ZIP archive
+  ansible.builtin.unarchive:
+    src: "{{ moodlebox_plugin_archive_path }}"
+    dest: "{{ moodlebox_plugin_parent_path }}"
+    remote_src: true
+  when:
+    - moodlebox_plugin.zip_url is defined
+    - moodlebox_zip_plugin_needs_install | bool
+
+- name: Ensure ZIP plugin path exists after extraction
+  ansible.builtin.stat:
+    path: "{{ moodlebox_plugin_target_path }}"
+  register: moodlebox_zip_plugin_target_stat
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Validate ZIP plugin extracted into expected path
+  ansible.builtin.assert:
+    that:
+      - moodlebox_zip_plugin_target_stat.stat.exists
+      - moodlebox_zip_plugin_target_stat.stat.isdir
+    fail_msg: >-
+      ZIP plugin {{ moodlebox_plugin.component }} did not extract into expected
+      path {{ moodlebox_plugin_target_path }}.
+      Ensure the archive layout matches the plugin path.
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Read installed ZIP plugin version file for component validation
+  ansible.builtin.slurp:
+    path: "{{ moodlebox_plugin_target_path }}/version.php"
+  register: moodlebox_zip_plugin_installed_version_file_after
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Validate installed ZIP plugin component matches expected component
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          moodlebox_zip_plugin_installed_version_file_after.content
+          | b64decode
+          | regex_findall("plugin->component[ \\t]*=[ \\t]*'([^']+)'")
+          | first
+          | default('')
+          | trim
+        )
+        ==
+        (moodlebox_plugin.component | string | trim)
+    fail_msg: >-
+      Plugin at {{ moodlebox_plugin_target_path }} does not declare component
+      {{ moodlebox_plugin.component }} in version.php.
+      Verify the configured zip_url/path pair for this plugin.
+  when: moodlebox_plugin.zip_url is defined
+
+- name: Ensure additional Moodle plugin ownership and permissions
+  ansible.builtin.file:
+    path: "{{ moodlebox_plugin_target_path }}"
+    state: directory
+    owner: www-data
+    group: "{{ moodlebox_filesystem_group | default('www-data') }}"
+    mode: "ug+w,o-w"
+    recurse: true

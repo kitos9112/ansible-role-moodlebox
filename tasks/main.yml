@@ -1,12 +1,57 @@
 ---
 - block:
-  - include_tasks: install_prereqs.yml
-  - include_tasks: install_mariadb.yml
-  - include_tasks: install_moodle.yml
-  - include_tasks: install_nginx.yml
-  - include_tasks: install_extras.yml
-  - include_tasks: cleanup.yml
+    - name: Include Moodle prerequisites tasks
+      ansible.builtin.include_tasks:
+        file: install_prereqs.yml
+        apply:
+          tags:
+            - moodle
+      tags:
+        - moodle
+
+    - name: Include Moodle MariaDB tasks
+      ansible.builtin.include_tasks:
+        file: install_mariadb.yml
+        apply:
+          tags:
+            - moodle
+      tags:
+        - moodle
+
+    - name: Include Moodle core tasks
+      ansible.builtin.include_tasks:
+        file: install_moodle.yml
+        apply:
+          tags:
+            - moodle
+      tags:
+        - moodle
+
+    - name: Include Moodle NGINX tasks
+      ansible.builtin.include_tasks:
+        file: install_nginx.yml
+        apply:
+          tags:
+            - moodle
+      tags:
+        - moodle
+
+    - name: Include Moodle extra tasks
+      ansible.builtin.include_tasks:
+        file: install_extras.yml
+        apply:
+          tags:
+            - moodle
+      tags:
+        - moodle
   when: not moodlebox_uninstall_moodle |bool
 
-- include_tasks: uninstall_moodle.yml
+- name: Include Moodle uninstall tasks
+  ansible.builtin.include_tasks:
+    file: uninstall_moodle.yml
+    apply:
+      tags:
+        - moodle
+  tags:
+    - moodle
   when: moodlebox_uninstall_moodle |bool

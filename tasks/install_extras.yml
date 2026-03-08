@@ -34,12 +34,30 @@
     name: MAILTO
     value: '""'
 
+- name: Check whether moodlebox group exists on target host
+  ansible.builtin.command:
+    argv:
+      - getent
+      - group
+      - "{{ moodlebox_username }}"
+  register: moodlebox_group_check
+  changed_when: false
+  failed_when: false
+
+- name: Resolve adminer file group
+  ansible.builtin.set_fact:
+    moodlebox_adminer_group: "{{ moodlebox_username if moodlebox_group_check.rc == 0 else 'www-data' }}"
+
 - name: install adminer latest release
   get_url:
     url: "https://www.adminer.org/latest.php"
     dest: "{{ moodlebox_moodle_source_dir }}/adminer.php"
+
+- name: Ensure adminer file ownership and mode
+  ansible.builtin.file:
+    path: "{{ moodlebox_moodle_source_dir }}/adminer.php"
     owner: "www-data"
-    group: "{{ moodlebox_username }}"
+    group: "{{ moodlebox_adminer_group }}"
     mode: "0664"
 
 - name: check for existing borg binaray install
@@ -60,7 +78,7 @@
     dest: /usr/bin/borg
   when:
     - ansible_architecture == 'aarch64'
-    - (borg_version is defined and borg_version.stdout != moodlebox_borg_version) or borg_version is not defined
+    - (borg_version is defined and borg_version.stdout | default('') != moodlebox_borg_version) or borg_version is not defined
 
 - name: Configure backups scripts
   template:

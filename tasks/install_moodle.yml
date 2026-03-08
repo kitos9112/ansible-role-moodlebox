@@ -1,10 +1,151 @@
 ---
+- name: Check whether Moodle config already exists
+  ansible.builtin.stat:
+    path: "{{ moodlebox_moodle_source_dir }}/config.php"
+  register: moodlebox_config_present
+
+- name: Ensure existing Moodle installation is available in attach mode
+  ansible.builtin.assert:
+    that:
+      - moodlebox_config_present.stat.exists
+      - moodlebox_config_present.stat.isreg
+    fail_msg: >-
+      Attach mode is enabled, but {{ moodlebox_moodle_source_dir }}/config.php was not found.
+      Disable moodlebox_attach_existing_installation for a fresh install path.
+  when: moodlebox_attach_existing_installation | bool
+
+- name: Check whether existing Moodle source is a git checkout
+  ansible.builtin.stat:
+    path: "{{ moodlebox_moodle_source_dir }}/.git"
+  register: moodlebox_source_git_dir
+  when:
+    - moodlebox_attach_existing_installation | bool
+    - moodlebox_upgrade_existing_installation | bool
+
+- name: Ensure attach-upgrade mode has git metadata available
+  ansible.builtin.assert:
+    that:
+      - moodlebox_source_git_dir.stat.exists
+      - moodlebox_source_git_dir.stat.isdir
+    fail_msg: >-
+      Attach-upgrade mode requires a git-based Moodle source tree at
+      {{ moodlebox_moodle_source_dir }}. '.git' was not found.
+      Disable moodlebox_upgrade_existing_installation or convert Moodle source to git.
+  when:
+    - moodlebox_attach_existing_installation | bool
+    - moodlebox_upgrade_existing_installation | bool
+
+- name: Determine whether Moodle code management should run
+  ansible.builtin.set_fact:
+    moodlebox_manage_code: >-
+      {{
+        (not (moodlebox_attach_existing_installation | bool))
+        or
+        (moodlebox_upgrade_existing_installation | bool)
+      }}
+
+- name: Set default Moodle code dirroot
+  ansible.builtin.set_fact:
+    moodlebox_moodle_code_dir: "{{ moodlebox_moodle_source_dir }}"
+
+- name: Resolve effective Moodle code dirroot from config.php
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/php
+      - -r
+      - "define('CLI_SCRIPT', true); require '{{ moodlebox_moodle_source_dir }}/config.php'; echo $CFG->dirroot;"
+  changed_when: false
+  register: moodlebox_cfg_dirroot
+  when: moodlebox_config_present.stat.exists
+
+- name: Override Moodle code dirroot from config when available
+  ansible.builtin.set_fact:
+    moodlebox_moodle_code_dir: "{{ moodlebox_cfg_dirroot.stdout | trim }}"
+  when:
+    - moodlebox_cfg_dirroot is defined
+    - moodlebox_cfg_dirroot.stdout is defined
+    - moodlebox_cfg_dirroot.stdout | trim | length > 0
+
+- name: Read existing git safe directories
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --global
+      - --get-all
+      - safe.directory
+  changed_when: false
+  failed_when: false
+  register: moodlebox_git_safe_directories
+  when: moodlebox_manage_code | bool
+
+- name: Mark Moodle git directories as safe for root
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --global
+      - --add
+      - safe.directory
+      - "{{ item }}"
+  loop:
+    - "{{ moodlebox_moodle_source_dir }}"
+    - "{{ moodlebox_moodle_source_dir }}/lib/MathJax"
+  when:
+    - moodlebox_manage_code | bool
+    - item not in (moodlebox_git_safe_directories.stdout_lines | default([]))
+
+- name: Check whether configured Moodle filesystem group exists
+  ansible.builtin.command:
+    argv:
+      - getent
+      - group
+      - "{{ moodlebox_username }}"
+  changed_when: false
+  failed_when: false
+  register: moodlebox_fs_group_check
+  when: moodlebox_manage_code | bool
+
+- name: Resolve Moodle filesystem group
+  ansible.builtin.set_fact:
+    moodlebox_filesystem_group: "{{ moodlebox_username if moodlebox_fs_group_check.rc == 0 else 'www-data' }}"
+  when: moodlebox_manage_code | bool
+
+- name: Check Moodle git working tree status in attach-upgrade mode
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ moodlebox_moodle_source_dir }}"
+      - status
+      - --porcelain
+  changed_when: false
+  register: moodlebox_moodle_git_status
+  when:
+    - moodlebox_attach_existing_installation | bool
+    - moodlebox_upgrade_existing_installation | bool
+
+- name: Ensure local Moodle git changes are acknowledged before force update
+  ansible.builtin.assert:
+    that:
+      - (moodlebox_moodle_git_status.stdout | trim == '') or (moodlebox_moodle_git_force_update | bool)
+    fail_msg: >-
+      Existing Moodle source has local git changes in {{ moodlebox_moodle_source_dir }}.
+      Set moodlebox_moodle_git_force_update=true to reset tracked files to branch
+      {{ moodlebox_moodle_branch }} during upgrade, or clean the working tree manually.
+  when:
+    - moodlebox_attach_existing_installation | bool
+    - moodlebox_upgrade_existing_installation | bool
+
 - name: create database '{{ moodlebox_moodle_db }}' for Moodle
-  mysql_db:
+  community.mysql.mysql_db:
     name: "{{ moodlebox_moodle_db }}"
     state: "present"
-    config_file: /etc/mysql/debian.cnf
+    login_host: "localhost"
+    login_user: "{{ moodlebox_db_username }}"
+    login_password: "{{ moodlebox_db_password }}"
   register: moodle_db_created
+  when: not moodlebox_attach_existing_installation | bool
 
 - name: format release date using locales
   command: "date --date={{ moodlebox_release_date }} '+%-d %B %Y'"
@@ -13,17 +154,21 @@
   with_indexed_items: "{{ moodlebox_locales }}"
   changed_when: false
   register: "formatted_dates"
-  when: "formatted_dates is not defined or item.0 < moodlebox_locales|length"
+  when:
+    - not moodlebox_attach_existing_installation | bool
+    - formatted_dates is not defined or item.0 < moodlebox_locales|length
 
 - name: set vars with formatted dates
   set_fact: '{{ item.0 | regex_replace("^(.*)_.*UTF-8$", "moodlebox_release_date_\1") }}={{ item.1.stdout }}'
   with_together:
     - "{{ moodlebox_locales }}"
     - "{{ formatted_dates.results }}"
+  when: not moodlebox_attach_existing_installation | bool
 
 - name: set summary string with formatted dates
   set_fact:
     moodlebox_moodle_summary: "{{ moodlebox_moodle_summary }}"
+  when: not moodlebox_attach_existing_installation | bool
 
 - name: get Moodle version '{{ moodlebox_moodle_branch }}' from git repository
   git:
@@ -31,13 +176,25 @@
     version: "{{ moodlebox_moodle_branch }}"
     dest: "{{ moodlebox_moodle_source_dir }}"
     depth: 1
+    force: "{{ moodlebox_moodle_git_force_update | bool }}"
+  when: moodlebox_manage_code | bool
+
+- name: Install or update additional Moodle plugins
+  ansible.builtin.include_tasks: manage_additional_plugin.yml
+  loop: "{{ moodlebox_additional_plugins }}"
+  loop_control:
+    loop_var: moodlebox_plugin
+    label: "{{ moodlebox_plugin.component | default('unknown-component') }}"
+  when:
+    - moodlebox_manage_code | bool
+    - moodlebox_additional_plugins | length > 0
 
 - name: create Moodle data and cache directories and set adequate permissions
   file:
     path: "{{ item }}"
     state: "directory"
     owner: "www-data"
-    group: "{{ moodlebox_username }}"
+    group: "{{ moodlebox_filesystem_group }}"
     mode: "ug+w,o-w"
     recurse: "yes"
   with_items:
@@ -48,6 +205,7 @@
     - "{{ moodlebox_moodle_data_dir }}/repository/files"
     - "/var/cache/moodle"
     - "/var/cache/moodle-cache-backup"
+  when: moodlebox_manage_code | bool
 
 - name: set sticky bit for moodledata directory
   file:
@@ -55,6 +213,7 @@
     state: "directory"
     mode: "g+s"
     recurse: "yes"
+  when: moodlebox_manage_code | bool
 
 - name: configure temporary storage for Moodle cache
   mount:
@@ -97,6 +256,7 @@
   args:
     chdir: "{{ moodlebox_moodle_source_dir }}"
     creates: "{{ moodlebox_moodle_source_dir }}/config.php"
+  when: not moodlebox_attach_existing_installation | bool
 
 - name: write extra parameters to the Moodle config file
   lineinfile:
@@ -121,6 +281,7 @@
       value: "false"
     - name: "preventexecpath "
       value: "true"
+  when: moodlebox_manage_code | bool
 
 - name: set Moodle config file owner, group and permissions
   file:
@@ -129,12 +290,30 @@
     group: "www-data"
     mode: "0600"
 
+- name: Run Moodle upgrade in attach mode
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/runuser
+      - -u
+      - "{{ moodlebox_upgrade_run_as_user }}"
+      - --
+      - /usr/bin/php
+      - "{{ moodlebox_moodle_source_dir }}/admin/cli/upgrade.php"
+      - --non-interactive
+  args:
+    chdir: "{{ moodlebox_moodle_source_dir }}"
+  changed_when: false
+  when:
+    - moodlebox_attach_existing_installation | bool
+    - moodlebox_upgrade_existing_installation | bool
+
 - name: get MathJax library version '{{ moodlebox_mathjax_version }}' from git repository
   git:
     repo: "https://github.com/mathjax/MathJax.git"
     dest: "{{ moodlebox_moodle_source_dir }}/lib/MathJax"
     version: "{{ moodlebox_mathjax_version }}"
     depth: 1
+  when: moodlebox_manage_code | bool
 
 - name: change MathJax library file permissions
   file:
@@ -144,3 +323,4 @@
     group: "www-data"
     mode: "ug+w,o-w"
     recurse: "yes"
+  when: moodlebox_manage_code | bool

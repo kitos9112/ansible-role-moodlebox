@@ -5,7 +5,7 @@
     question: "{{ item }}"
     vtype: "password"
     value: "{{ moodlebox_db_root_password | quote }}"
-  # passwords cannot be read, so they always appear as changed, this is alimitation of debconf itself.
+  # Passwords cannot be read, so they always appear as changed.
   changed_when: false
   with_items:
     - "mysql-server/root_password"
@@ -35,7 +35,9 @@
     config_file: /etc/mysql/debian.cnf
     priv: "*.*:ALL,GRANT"
     state: "present"
-  #no_log: true
+  when:
+    - configure_mariadb_install is successful
+    - (not moodlebox_attach_existing_installation | bool) or (moodlebox_upgrade_existing_installation | bool)
 
 - block:
     - name: Stop MariaDB-server service
@@ -52,6 +54,37 @@
       delegate_to: "{{ inventory_hostname }}"
   when: install_mariadb.changed |bool
 
+- name: Ensure MariaDB data directory exists on mounted volume
+  ansible.builtin.file:
+    path: "{{ moodlebox_db_mount }}/var/lib/mysql"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0750"
+
+- name: Normalize MariaDB data directory ownership recursively
+  ansible.builtin.file:
+    path: "{{ moodlebox_db_mount }}/var/lib/mysql"
+    owner: mysql
+    group: mysql
+    recurse: true
+
+- name: Ensure MariaDB log directory exists
+  ansible.builtin.file:
+    path: /var/log/mysql
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0755"
+
+- name: Ensure MariaDB error log file exists
+  ansible.builtin.file:
+    path: /var/log/mysql/error.log
+    state: touch
+    owner: mysql
+    group: mysql
+    mode: "0640"
+
 - name: update MariaDB settings
   register: update_mariadb
   template:
@@ -65,4 +98,5 @@
   systemd:
     name: "mariadb"
     state: "restarted"
-  when: update_mariadb.changed |bool
+  when:
+    - install_mariadb.changed |bool or update_mariadb.changed |bool

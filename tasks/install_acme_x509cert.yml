@@ -1,18 +1,32 @@
 ---
 - name: Ensure SSL NGINX directory exists
-  file:
-    name: /etc/nginx/ssl
+  ansible.builtin.file:
+    path: /etc/nginx/ssl
     state: directory
     mode: 0755
 
 - name: "Ensure {{ moodlebox_certbot_dir }} directory exists"
-  file:
+  ansible.builtin.file:
     path: "{{ moodlebox_certbot_dir }}/etc"
     state: directory
     mode: 0755
 
-- name: Copy cf.ini into etc folder
-  template:
+- name: Ensure Cloudflare credentials for certbot are configured
+  ansible.builtin.assert:
+    that:
+      - >-
+        (moodlebox_cf_api_token | default('') | trim | length > 0) or
+        (
+          moodlebox_cf_email_address | default(cloudflare_account_email | default('')) | trim | length > 0 and
+          moodlebox_cf_api_key | default(cloudflare_api_key | default('')) | trim | length > 0
+        )
+    fail_msg: >-
+      Configure Cloudflare credentials for ACME.
+      Use `moodlebox_cf_api_token`, or both
+      `moodlebox_cf_email_address` and `moodlebox_cf_api_key`.
+
+- name: Copy Cloudflare config into etc folder
+  ansible.builtin.template:
     src: cf.ini.j2
     dest: "{{ moodlebox_certbot_dir }}/etc/cf.ini"
     mode: 0700
@@ -20,7 +34,7 @@
     group: root
 
 - name: Create `docker-cert-moodlebox.sh` SH script for obtaining and installing certs
-  template:
+  ansible.builtin.template:
     src: docker-cert.sh.j2
     dest: "{{ moodlebox_certbot_dir }}/docker-cert-moodlebox.sh"
     mode: 0700
@@ -28,16 +42,25 @@
     group: root
 
 - name: Execute previously-copied SH script
-  shell:
+  ansible.builtin.command:
     chdir: "{{ moodlebox_certbot_dir }}"
     cmd: ./docker-cert-moodlebox.sh certonly
   register: moodlebox_cert_check
   check_mode: false
   changed_when: >-
-    moodlebox_cert_check.stdout.find('Certificate not yet due for renewal; no action taken') == -1
+    ((moodlebox_cert_check.stdout | default('')) ~
+    (moodlebox_cert_check.stderr | default('')))
+    .find('Certificate not yet due for renewal; no action taken') == -1
+
+- name: Ensure cron service is enabled and started
+  ansible.builtin.service:
+    name: "{{ 'cron' if ansible_facts['os_family'] == 'Debian' else 'crond' }}"
+    state: started
+    enabled: true
+  when: ansible_facts["service_mgr"] == "systemd"
 
 - name: Create a cronjob to automatically renew the cert
-  cron:
+  ansible.builtin.cron:
     name: ACME Let's Encrypt @MoodleBox
     special_time: daily
     user: root
